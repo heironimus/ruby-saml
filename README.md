@@ -2,8 +2,10 @@
 
 ## Why this is forked
 
-* Auth0 sends an invalid XML schema and this gem is very strict, so the
-  only around the strict validation is to patch.
+* Auth0 sometimes sends an invalid XML schema and this gem is very
+  strict, so the only way around the strict validation is to patch.
+  * It sends a Signature in the wrong place
+  * It leaves out Audience
 
 ## Updating from 1.3.x to 1.4.X
 
