@@ -5,7 +5,15 @@
   * It sends a Signature in the wrong place
   * It leaves out Audience
 
-# Ruby SAML [![Build Status](https://secure.travis-ci.org/onelogin/ruby-saml.svg)](http://travis-ci.org/onelogin/ruby-saml) [![Coverage Status](https://coveralls.io/repos/onelogin/ruby-saml/badge.svg?branch=master)](https://coveralls.io/r/onelogin/ruby-saml?branch=master) [![Gem Version](https://badge.fury.io/rb/ruby-saml.svg)](http://badge.fury.io/rb/ruby-saml)
+# Ruby SAML [![Build Status](https://secure.travis-ci.org/onelogin/ruby-saml.svg)](http://travis-ci.org/onelogin/ruby-saml) [![Coverage Status](https://coveralls.io/repos/onelogin/ruby-saml/badge.svg?branch=master)](https://coveralls.io/r/onelogin/ruby-saml?branch=master)
+
+## Updating from 1.11.x to 1.12.0
+Version `1.12.0` adds support for gcm algorithm and
+change/adds specific error messages for signature validations
+
+`idp_sso_target_url` and `idp_slo_target_url` attributes of the Settings class deprecated in favor of `idp_sso_service_url` and `idp_slo_service_url`.
+In IDPMetadataParser, `parse`, `parse_to_hash` and `parse_to_array` methods now retrieve SSO URL and SLO URL endpoints with
+`idp_sso_service_url` and `idp_slo_service_url` (previously `idp_sso_target_url` and `idp_slo_target_url` respectively).
 
 ## Updating from 1.10.x to 1.11.0
 Version `1.11.0` deprecates the use of `settings.issuer` in favour of `settings.sp_entity_id`.
@@ -123,9 +131,11 @@ We created a demo project for Rails4 that uses the latest version of this librar
 * 2.5.x
 * 2.6.x
 * 2.7.x
-* JRuby 1.7.19
-* JRuby 9.0.0.0
-* JRuby 9.2.0.0
+* 3.0.x
+* JRuby 1.7.x
+* JRuby 9.0.x
+* JRuby 9.1.x
+* JRuby 9.2.x
 
 ## Adding Features, Pull Requests
 * Fork the repository
@@ -150,6 +160,12 @@ However, ruby-saml never enables this dangerous Nokogiri configuration;
 ruby-saml never enables DTDLOAD, and it never disables NONET.
 
 
+The OneLogin::RubySaml::IdpMetadataParser class does not validate in any way the URL that is introduced in order to be parsed. 
+
+Usually the same administrator that handles the Service Provider also sets the URL to the IdP, which should be a trusted resource.
+
+But there are other scenarios, like a SAAS app where the administrator of the app delegates this functionality to other users. In this case, extra precaution should be taken in order to validate such URL inputs and avoid attacks like SSRF.
+
 ## Getting Started
 In order to use the toolkit you will need to install the gem (either manually or using Bundler), and require the library in your Ruby application:
 
@@ -157,7 +173,7 @@ Using `Gemfile`
 
 ```ruby
 # latest stable
-gem 'ruby-saml', '~> 1.9.0'
+gem 'ruby-saml', '~> 1.11.0'
 
 # or track master for bleeding-edge
 gem 'ruby-saml', :github => 'onelogin/ruby-saml'
@@ -268,8 +284,8 @@ def saml_settings
   settings.assertion_consumer_service_url = "http://#{request.host}/saml/consume"
   settings.sp_entity_id                   = "http://#{request.host}/saml/metadata"
   settings.idp_entity_id                  = "https://app.onelogin.com/saml/metadata/#{OneLoginAppId}"
-  settings.idp_sso_target_url             = "https://app.onelogin.com/trust/saml2/http-post/sso/#{OneLoginAppId}"
-  settings.idp_slo_target_url             = "https://app.onelogin.com/trust/saml2/http-redirect/slo/#{OneLoginAppId}"
+  settings.idp_sso_service_url             = "https://app.onelogin.com/trust/saml2/http-post/sso/#{OneLoginAppId}"
+  settings.idp_slo_service_url             = "https://app.onelogin.com/trust/saml2/http-redirect/slo/#{OneLoginAppId}"
   settings.idp_cert_fingerprint           = OneLoginAppCertFingerPrint
   settings.idp_cert_fingerprint_algorithm = "http://www.w3.org/2000/09/xmldsig#sha1"
   settings.name_identifier_format         = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
@@ -334,7 +350,7 @@ class SamlController < ApplicationController
 
     settings.assertion_consumer_service_url = "http://#{request.host}/saml/consume"
     settings.sp_entity_id                   = "http://#{request.host}/saml/metadata"
-    settings.idp_sso_target_url             = "https://app.onelogin.com/saml/signon/#{OneLoginAppId}"
+    settings.idp_sso_service_url             = "https://app.onelogin.com/saml/signon/#{OneLoginAppId}"
     settings.idp_cert_fingerprint           = OneLoginAppCertFingerPrint
     settings.name_identifier_format         = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
 
@@ -407,8 +423,8 @@ end
 The following attributes are set:
   * idp_entity_id
   * name_identifier_format
-  * idp_sso_target_url
-  * idp_slo_target_url
+  * idp_sso_service_url
+  * idp_slo_service_url
   * idp_attribute_names
   * idp_cert
   * idp_cert_fingerprint
@@ -474,6 +490,9 @@ Imagine this `saml:AttributeStatement`
       <saml:AttributeValue xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="true"/>
       <saml:AttributeValue xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="1"/>
     </saml:Attribute>
+    <saml:Attribute Name="http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname">
+      <saml:AttributeValue>usersName</saml:AttributeValue>
+    </saml:Attribute>
   </saml:AttributeStatement>
 ```
 
@@ -484,7 +503,8 @@ pp(response.attributes)   # is an OneLogin::RubySaml::Attributes object
    "another_value"=>["value1", "value2"],
    "role"=>["role1", "role2", "role3"],
    "attribute_with_nil_value"=>[nil],
-   "attribute_with_nils_and_empty_strings"=>["", "valuePresent", nil, nil]}>
+   "attribute_with_nils_and_empty_strings"=>["", "valuePresent", nil, nil]
+   "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"=>["usersName"]}>
 
 # Active single_value_compatibility
 OneLogin::RubySaml::Attributes.single_value_compatibility = true
@@ -501,6 +521,9 @@ pp(response.attributes.single(:role))
 pp(response.attributes.multi(:role))
 # => ["role1", "role2", "role3"]
 
+pp(response.attributes.fetch(:role))
+# => "role1"
+
 pp(response.attributes[:attribute_with_nil_value])
 # => nil
 
@@ -515,6 +538,9 @@ pp(response.attributes.single(:not_exists))
 
 pp(response.attributes.multi(:not_exists))
 # => nil
+
+pp(response.attributes.fetch(/givenname/))
+# => "usersName"
 
 # Deactive single_value_compatibility
 OneLogin::RubySaml::Attributes.single_value_compatibility = false
@@ -531,6 +557,9 @@ pp(response.attributes.single(:role))
 pp(response.attributes.multi(:role))
 # => ["role1", "role2", "role3"]
 
+pp(response.attributes.fetch(:role))
+# => ["role1", "role2", "role3"]
+
 pp(response.attributes[:attribute_with_nil_value])
 # => [nil]
 
@@ -545,6 +574,9 @@ pp(response.attributes.single(:not_exists))
 
 pp(response.attributes.multi(:not_exists))
 # => nil
+
+pp(response.attributes.fetch(/givenname/))
+# => ["usersName"]
 ```
 
 The `saml:AuthnContextClassRef` of the AuthNRequest can be provided by `settings.authn_context`; possible values are described at [SAMLAuthnCxt]. The comparison method can be set using `settings.authn_context_comparison` parameter. Possible values include: 'exact', 'better', 'maximum' and 'minimum' (default value is 'exact').
@@ -630,20 +662,26 @@ def sp_logout_request
   # LogoutRequest accepts plain browser requests w/o paramters
   settings = saml_settings
 
-  if settings.idp_slo_target_url.nil?
+  if settings.idp_slo_service_url.nil?
     logger.info "SLO IdP Endpoint not found in settings, executing then a normal logout'"
     delete_session
   else
 
-    # Since we created a new SAML request, save the transaction_id
-    # to compare it with the response we get back
     logout_request = OneLogin::RubySaml::Logoutrequest.new()
-    session[:transaction_id] = logout_request.uuid
-    logger.info "New SP SLO for userid '#{session[:userid]}' transactionid '#{session[:transaction_id]}'"
+    logger.info "New SP SLO for userid '#{session[:userid]}' transactionid '#{logout_request.uuid}'"
 
     if settings.name_identifier_value.nil?
       settings.name_identifier_value = session[:userid]
     end
+
+    # Ensure user is logged out before redirect to IdP, in case anything goes wrong during single logout process (as recommended by saml2int [SDP-SP34])
+    logged_user = session[:userid]
+    logger.info "Delete session for '#{session[:userid]}'"
+    delete_session
+
+    # Save the transaction_id to compare it with the response we get back
+    session[:transaction_id] = logout_request.uuid
+    session[:logged_out_user] = logged_user
 
     relayState =  url_for controller: 'saml', action: 'index'
     redirect_to(logout_request.create(settings, :RelayState => relayState))
@@ -672,7 +710,7 @@ def process_logout_response
     logger.error "The SAML Logout Response is invalid"
   else
     # Actually log out this session
-    logger.info "Delete session for '#{session[:userid]}'"
+    logger.info "SLO completed for '#{session[:logged_out_user]}'"
     delete_session
   end
 end
@@ -681,6 +719,8 @@ end
 def delete_session
   session[:userid] = nil
   session[:attributes] = nil
+  session[:transaction_id] = nil
+  session[:logged_out_user] = nil
 end
 ```
 
@@ -748,6 +788,14 @@ class SamlController < ApplicationController
 end
 ```
 
+You can add ValidUntil and CacheDuration to the XML Metadata using instead
+```ruby
+  # Valid until => 2 days from now
+  # Cache duration = 604800s = 1 week
+  valid_until = Time.now + 172800
+  cache_duration = 604800
+  meta.generate(settings, false, valid_until, cache_duration)
+```
 
 ## Clock Drift
 

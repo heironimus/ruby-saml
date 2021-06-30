@@ -227,11 +227,10 @@ module OneLogin
               statuses = nodes.collect do |inner_node|
                 inner_node.attributes["Value"]
               end
-              extra_code = statuses.join(" | ")
-              if extra_code
-                code = "#{code} | #{extra_code}"
-              end
+
+              code = [code, statuses].flatten.join(" | ")
             end
+
             code
           end
         end
@@ -354,6 +353,17 @@ module OneLogin
         ).nil?
       end
 
+      def response_id
+        id(document)
+      end
+
+      def assertion_id
+        @assertion_id ||= begin
+          node = xpath_first_from_signed_assertion("")
+          node.nil? ? nil : node.attributes['ID']
+        end
+      end
+
       private
 
       # Validates the SAML Response (calls several validation methods)
@@ -366,7 +376,6 @@ module OneLogin
         return false unless validate_response_state
 
         validations = [
-          :validate_response_state,
           :validate_version,
           :validate_id,
           :validate_success_status,
@@ -448,7 +457,7 @@ module OneLogin
       # @return [Boolean] True if the SAML Response contains an ID, otherwise returns False
       #
       def validate_id
-        unless id(document)
+        unless response_id
           return append_error("Missing ID attribute on SAML Response")
         end
 
@@ -817,7 +826,7 @@ module OneLogin
         # otherwise, review if the decrypted assertion contains a signature
         sig_elements = REXML::XPath.match(
           document,
-          "/p:Response[@ID=$id]/ds:Signature]",
+          "/p:Response[@ID=$id]/ds:Signature",
           { "p" => PROTOCOL, "ds" => DSIG },
           { 'id' => document.signed_element_id }
         )
@@ -836,7 +845,7 @@ module OneLogin
         end
 
         if sig_elements.size != 1
-          if  sig_elements.size == 0
+          if sig_elements.size == 0
              append_error("Signed element id ##{doc.signed_element_id} is not found")
           else
              append_error("Signed element id ##{doc.signed_element_id} is found more than once")
@@ -844,6 +853,7 @@ module OneLogin
           return append_error(error_msg)
         end
 
+        old_errors = @errors.clone
 
         idp_certs = settings.get_idp_cert_multi
         if idp_certs.nil? || idp_certs[:signing].empty?
@@ -867,21 +877,27 @@ module OneLogin
           valid = false
           expired = false
           idp_certs[:signing].each do |idp_cert|
-            valid = doc.validate_document_with_cert(idp_cert)
+            valid = doc.validate_document_with_cert(idp_cert, true)
             if valid
               if settings.security[:check_idp_cert_expiration]
                 if OneLogin::RubySaml::Utils.is_cert_expired(idp_cert)
                   expired = true
                 end
               end
+
+              # At least one certificate is valid, restore the old accumulated errors
+              @errors = old_errors
               break
             end
+
           end
           if expired
             error_msg = "IdP x509 certificate expired"
             return append_error(error_msg)
           end
           unless valid
+            # Remove duplicated errors
+            @errors = @errors.uniq
             return append_error(error_msg)
           end
         end

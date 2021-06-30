@@ -10,7 +10,7 @@ class SloLogoutresponseTest < Minitest::Test
 
     before do
       settings.idp_entity_id = 'https://app.onelogin.com/saml/metadata/SOMEACCOUNT'
-      settings.idp_slo_target_url = "http://unauth.com/logout"
+      settings.idp_slo_service_url = "http://unauth.com/logout"
       settings.name_identifier_value = "f00f00"
       settings.compress_request = true
       settings.certificate = ruby_saml_cert_text
@@ -63,6 +63,24 @@ class SloLogoutresponseTest < Minitest::Test
 
       inflated = decode_saml_response_payload(unauth_url)
       assert_match /<samlp:StatusMessage>Custom Logout Message<\/samlp:StatusMessage>/, inflated
+    end
+
+    it "set a custom logout message and an status on the response" do
+      unauth_url = OneLogin::RubySaml::SloLogoutresponse.new.create(settings, nil, "Custom Logout Message", {}, "urn:oasis:names:tc:SAML:2.0:status:PartialLogout")
+
+      inflated = decode_saml_response_payload(unauth_url)
+      assert_match /<samlp:StatusMessage>Custom Logout Message<\/samlp:StatusMessage>/, inflated
+      assert_match /<samlp:StatusCode Value='urn:oasis:names:tc:SAML:2.0:status:PartialLogout/, inflated
+    end
+
+    it "uses the response location when set" do
+      settings.idp_slo_response_service_url = "http://unauth.com/logout/return"
+
+      unauth_url = OneLogin::RubySaml::SloLogoutresponse.new.create(settings, logout_request.id)
+      assert_match /^http:\/\/unauth\.com\/logout\/return\?SAMLResponse=/, unauth_url
+
+      inflated = decode_saml_response_payload(unauth_url)
+      assert_match /Destination='http:\/\/unauth.com\/logout\/return'/, inflated
     end
 
     describe "when the settings indicate to sign (embedded) logout response" do
