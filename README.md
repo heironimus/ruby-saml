@@ -1,3 +1,10 @@
+## Why this is forked
+
+* Auth0 sometimes sends an invalid XML schema and this gem is very
+  strict, so the only way around the strict validation is to patch.
+  * It sends a Signature in the wrong place
+  * It leaves out Audience
+
 # Ruby SAML [![Build Status](https://secure.travis-ci.org/onelogin/ruby-saml.svg)](http://travis-ci.org/onelogin/ruby-saml) [![Coverage Status](https://coveralls.io/repos/onelogin/ruby-saml/badge.svg?branch=master)](https://coveralls.io/r/onelogin/ruby-saml?branch=master)
 
 ## Updating from 1.11.x to 1.12.0
